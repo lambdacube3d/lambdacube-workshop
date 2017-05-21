@@ -1,5 +1,7 @@
 # LambdaCube 3D Workshop
 
+To prepare for the workshop read the following steps
+
 ## Requirements
 - Hardware support for OpenGL 3.3 or better
 - OS: Linux/OSX/Windows
@@ -13,9 +15,11 @@
    ```
    For other Linux distributions make sure the corresponing packages are installed.
    
-   These libraries required for OpenGL development.
+   *These libraries required for OpenGL development.*
 
 ## Run the sample project
+
+Checkout the this repository then run the following commands:
 ```
 stack setup
 stack build
