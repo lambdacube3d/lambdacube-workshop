@@ -19,7 +19,7 @@ To prepare for the workshop read the following steps
 
 ## Run the sample project
 
-Checkout the this repository then run the following commands:
+Checkout the this repository then run the following commands to check your setup.
 ```
 stack setup
 stack build
