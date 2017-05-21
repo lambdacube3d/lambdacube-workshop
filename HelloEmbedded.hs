@@ -97,7 +97,12 @@ initWindow title width height = do
       , WindowHint'ContextVersionMinor 3
       , WindowHint'OpenGLProfile OpenGLProfile'Core
       , WindowHint'OpenGLForwardCompat True
+      , WindowHint'OpenGLDebugContext True
       ]
-    Just win <- GLFW.createWindow width height title Nothing Nothing
-    GLFW.makeContextCurrent $ Just win
-    return win
+    let printError err msg = putStrLn $ "Error code: " ++ show err ++ "\n" ++ msg
+    setErrorCallback (Just printError)
+    GLFW.createWindow width height title Nothing Nothing >>= \case
+      Just win -> do
+        GLFW.makeContextCurrent $ Just win
+        return win
+      Nothing -> fail "Failed to create OpenGL 3.3 window"
