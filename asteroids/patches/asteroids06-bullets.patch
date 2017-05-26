@@ -1,0 +1,53 @@
+diff --git a/lambdacube-workshop/asteroids/Asteroids.hs b/lambdacube-workshop/asteroids/Asteroids.hs
+index 2373190..2d9a700 100644
+--- a/lambdacube-workshop/asteroids/Asteroids.hs
++++ b/lambdacube-workshop/asteroids/Asteroids.hs
+@@ -50,21 +50,25 @@ main = do
+     let loadObj fname = OBJ.loadOBJToGPU fname >>= \case
+           Left err -> fail err
+           Right a -> return a
+-    (asteroidMesh,asteroidMtl) <- loadObj "data/asteroid.obj"
++    (asteroidMesh,asteroidMtl)   <- loadObj "data/asteroid.obj"
+     (spaceshipMesh,spaceshipMtl) <- loadObj "data/spaceship.obj"
++    (bulletMesh,bulletMtl)       <- loadObj "data/missile.obj"
+ 
+     let objRadius obj = maximum [boundingSphereRadius $ meshData mesh | (mesh, _) <- obj]
+         spaceshipRadius = objRadius spaceshipMesh
+         asteroidRadius = objRadius asteroidMesh
++        bulletRadius = objRadius bulletMesh
+ 
+     putStrLn $ "spaceship radius: " ++ show spaceshipRadius
+     putStrLn $ "asteroid radius: " ++ show asteroidRadius
++    putStrLn $ "bullet radius: " ++ show bulletRadius
+ 
+     -- load materials textures
+-    gpuMtlLib <- OBJ.uploadMtlLib $ mconcat [spaceshipMtl, asteroidMtl]
++    gpuMtlLib <- OBJ.uploadMtlLib $ mconcat [spaceshipMtl, asteroidMtl, bulletMtl]
+ 
+     spaceshipObj <- OBJ.addOBJToObjectArray storage "objects" ["position", "angle", "radius"] spaceshipMesh gpuMtlLib
+     asteroidPool <- replicateM 1000 $ OBJ.addOBJToObjectArray storage "objects" ["position", "angle", "radius"] asteroidMesh gpuMtlLib
++    bulletPool   <- replicateM 1000 $ OBJ.addOBJToObjectArray storage "objects" ["position", "angle", "radius"] bulletMesh gpuMtlLib
+ 
+     -- debug sphere
+     sphereMesh <- LambdaCubeGL.uploadMeshToGPU $ sphere 1 8
+@@ -134,7 +138,8 @@ main = do
+                   Just spaceship -> addToScene (sPosition spaceship) (sAngle spaceship) (sRadius spaceship) (V4 1 0 0 1) spherePool
+                   _ -> return spherePool
+                 spherePool2 <- foldM (\pool asteroid -> addToScene (aPosition asteroid) 0 (aRadius asteroid) (V4 0 1 0 1) pool) spherePool1 asteroids
+-                disableObjects $ concat spherePool2
++                spherePool3 <- foldM (\pool bullet   -> addToScene (bPosition bullet)   0 (bRadius bullet)   (V4 0 1 1 1) pool) spherePool2 bullets
++                disableObjects $ concat spherePool3
+ 
+                 -- spaceship
+                 case spaceship of
+@@ -145,6 +150,10 @@ main = do
+                 asteroidPool1 <- foldM (\pool asteroid -> addToScene (aPosition asteroid) 0 (aRadius asteroid / asteroidRadius) white pool) asteroidPool asteroids
+                 disableObjects $ concat asteroidPool1
+ 
++                -- bullets
++                bulletPool1 <- foldM (\pool Bullet{..} -> addToScene bPosition bAngle (bRadius / bulletRadius) white pool) bulletPool bullets
++                disableObjects $ concat bulletPool1
++
+                 -- render
+                 LambdaCubeGL.renderFrame renderer
+                 GLFW.swapBuffers win

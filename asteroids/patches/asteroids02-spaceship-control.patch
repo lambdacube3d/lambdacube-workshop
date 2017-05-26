@@ -1,0 +1,158 @@
+diff --git a/lambdacube-workshop/asteroids/Asteroids.hs b/lambdacube-workshop/asteroids/Asteroids.hs
+index 7cacde1..9dcf24b 100644
+--- a/lambdacube-workshop/asteroids/Asteroids.hs
++++ b/lambdacube-workshop/asteroids/Asteroids.hs
+@@ -4,11 +4,13 @@ import Control.Monad
+ import System.IO
+ import System.Directory
+ 
++import Data.Vect
+ import Graphics.UI.GLFW as GLFW
+ 
+ import LambdaCube.Compiler as LambdaCube -- compiler
+ import LambdaCube.GL as LambdaCubeGL -- renderer
+ import qualified LambdaCube.OBJ as OBJ
++import Logic
+ 
+ asteroidsModificationTime = getModificationTime "Asteroids.lc"
+ 
+@@ -27,6 +29,8 @@ main = do
+             "time"            @: Float
+             "diffuseTexture"  @: FTexture2D
+             "diffuseColor"    @: V4F
++            "position"        @: V3F
++            "angle"           @: Float
+ 
+     storage <- LambdaCubeGL.allocStorage inputSchema
+ 
+@@ -35,11 +39,13 @@ main = do
+           Left err -> fail err
+           Right a -> return a
+     (asteroidMesh,asteroidMtl) <- loadObj "data/asteroid.obj"
++    (spaceshipMesh,spaceshipMtl) <- loadObj "data/spaceship.obj"
+ 
+     -- load materials textures
+-    gpuMtlLib <- OBJ.uploadMtlLib asteroidMtl
++    gpuMtlLib <- OBJ.uploadMtlLib $ mconcat [spaceshipMtl, asteroidMtl]
+ 
+-    asteroid <- OBJ.addOBJToObjectArray storage "objects" [] asteroidMesh gpuMtlLib
++    asteroidObj <- OBJ.addOBJToObjectArray storage "objects" [] asteroidMesh gpuMtlLib
++    spaceshipObj <- OBJ.addOBJToObjectArray storage "objects" ["position", "angle"] spaceshipMesh gpuMtlLib
+ 
+     -- allocate GL pipeline
+     let loadRenderer = do
+@@ -58,18 +64,37 @@ main = do
+                   putStrLn $ "setStorage ok"
+                   return $ Just renderer
+ 
++        disableObjects :: [LambdaCubeGL.Object] -> IO ()
++        disableObjects objs = mapM_ (\obj -> LambdaCubeGL.enableObject obj False) objs
++
++        addToScene :: Vec2 -> Float -> V4 Float -> [LambdaCubeGL.Object] -> IO ()
++        addToScene position angle color objs = do
++          forM_ objs $ \obj -> do
++            LambdaCubeGL.enableObject obj True
++            LambdaCubeGL.updateObjectUniforms obj $ do
++              "angle" @= return angle
++              "diffuseColor" @= return color
++              "position" @= let Vec2 x y = position in do
++                return (V3 x y 0)
++
++        white = V4 1 1 1 1 :: V4 Float
++
+         floatTime :: IO Float
+         floatTime = do
+           Just t <- GLFW.getTime
+           return $ realToFrac t
+ 
+-        loop renderer t0 lcTime0 = do
++        loop renderer world@World{..} t0 lcTime0 = do
+                 -- update graphics input
+                 GLFW.getWindowSize win >>= \(w,h) -> LambdaCubeGL.setScreenSize storage (fromIntegral w) (fromIntegral h)
+                 t <- floatTime
+                 LambdaCubeGL.updateUniforms storage $ do
+                   "time" @= return t
+ 
++                case spaceship of
++                  Nothing -> disableObjects spaceshipObj
++                  Just spaceship -> void $ addToScene (sPosition spaceship) (sAngle spaceship) white spaceshipObj
++
+                 -- render
+                 LambdaCubeGL.renderFrame renderer
+                 GLFW.swapBuffers win
+@@ -77,6 +102,16 @@ main = do
+ 
+                 let keyIsPressed k = fmap (==KeyState'Pressed) $ GLFW.getKey win k
+ 
++                userInput <- UserInput
++                  <$> keyIsPressed Key'Left
++                  <*> keyIsPressed Key'Right
++                  <*> keyIsPressed Key'Up
++                  <*> keyIsPressed Key'Down
++                  <*> keyIsPressed Key'Space
++                  <*> keyIsPressed Key'Enter
++                let deltaTime = t - t0
++                world' <- stepGame deltaTime userInput world -- Hint: IO is instance of MonadRandom
++
+                 lcTime <- asteroidsModificationTime
+                 let reload = lcTime /= lcTime0
+                 renderer' <- if not reload then return renderer else do
+@@ -88,12 +123,12 @@ main = do
+                       return newRenderer
+                 t <- if reload then floatTime else return t
+                 escape <- keyIsPressed Key'Escape
+-                if escape then return () else loop renderer' t lcTime
++                if escape then return () else loop renderer' world' t lcTime
+ 
+     Just renderer <- loadRenderer
+     t0 <- floatTime
+     lcTime <- asteroidsModificationTime
+-    loop renderer t0 lcTime
++    loop renderer world0 t0 lcTime
+ 
+     LambdaCubeGL.disposeRenderer renderer
+     LambdaCubeGL.disposeStorage storage
+diff --git a/lambdacube-workshop/asteroids/Asteroids.lc b/lambdacube-workshop/asteroids/Asteroids.lc
+index c8c4e80..916a128 100644
+--- a/lambdacube-workshop/asteroids/Asteroids.lc
++++ b/lambdacube-workshop/asteroids/Asteroids.lc
+@@ -1,9 +1,11 @@
+ 
++-- 'pos': The postion of entity
+ -- 'vertexpos':
+ -- 'uvw': Texture coordinates
+-vertexPositionAndTexture :: Vec 4 Float -> Vec 3 Float -> (Vec 4 Float, Vec 2 Float)
+-vertexPositionAndTexture vertexpos uvw =
+-    ( cameraTransform vertexpos
++-- 'angle':
++vertexPositionAndTexture :: Vec 3 Float -> Vec 4 Float -> Vec 3 Float -> Float -> (Vec 4 Float, Vec 2 Float)
++vertexPositionAndTexture pos vertexpos uvw angle =
++    ( cameraTransform $ V4 pos%x pos%y pos%z 1 + rotMatrixZ angle *. vertexpos
+     , V2 uvw%x (1 - uvw%y)
+     )
+ 
+@@ -11,13 +13,15 @@ cameraTransform v = perspective 0.1 100 45 1 *. lookat (V3 0 0 5) (V3 0 0 0) (V3
+ 
+ makeFrame (time :: Float)
+           (color :: Vec 4 Float)
++          (angle :: Float)
++          (position :: Vec 3 Float)
+           (texture :: Texture)
+           (prims :: PrimitiveStream Triangle (Vec 4 Float, Vec 3 Float, Vec 3 Float))
+ 
+     = imageFrame (emptyDepthImage 1, emptyColorImage (V4 1 1 1 1))
+   `overlay`
+       prims
+-    & mapPrimitives (\(vertexpos,_n,uvw) -> vertexPositionAndTexture vertexpos uvw)
++    & mapPrimitives (\(vertexpos,_n,uvw) -> vertexPositionAndTexture position vertexpos uvw angle)
+     & rasterizePrimitives (TriangleCtx CullBack PolygonFill NoOffset LastVertex) ((Smooth))
+     & mapFragments (\((uv)) -> ((color * texture2D (Sampler PointFilter MirroredRepeat texture) uv )))
+     & accumulateWith (DepthOp Less True, ColorOp NoBlending (V4 True True True True))
+@@ -25,5 +29,7 @@ makeFrame (time :: Float)
+ main = renderFrame $
+    makeFrame (Uniform "time")
+              (Uniform "diffuseColor")
++             (Uniform "angle")
++             (Uniform "position")
+              (Texture2DSlot "diffuseTexture")
+              (fetch "objects" (Attribute "position", Attribute "normal", Attribute "uvw"))

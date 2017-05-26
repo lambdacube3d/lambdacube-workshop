@@ -1,0 +1,16 @@
+# Blender MTL File: 'SmallSpaceFighter.blend'
+# Material Count: 1
+
+newmtl asteroid
+Ns 0.000000
+Ka 0.066667 0.066667 0.066667
+Kd 0.231373 0.231373 0.231373
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd data/Map__15_Noise.png
+map_Bump data/Map__4_Mix.png
+map_Ka data/Map__15_Noise.png
+map_Ke data/Map__12_Cellular.png

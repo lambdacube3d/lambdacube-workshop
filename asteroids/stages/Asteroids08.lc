@@ -1,0 +1,99 @@
+
+-- 'pos': The postion of entity
+-- 'vertexpos':
+-- 'uvw': Texture coordinates
+-- 'angle':
+vertexPositionAndTexture :: Vec 3 Float -> Vec 4 Float -> Vec 3 Float -> Float -> Float -> (Vec 4 Float, Vec 2 Float)
+vertexPositionAndTexture pos vertexpos uvw angle radius =
+    ( cameraTransform $ V4 pos%x pos%y pos%z 1 + rotMatrixZ angle *. scaledVertexPos
+    , V2 uvw%x (1 - uvw%y)
+    )
+  where
+    v = vertexpos *! radius
+    scaledVertexPos = V4 v%x v%y 0 1
+
+cameraTransform v = perspective 0.1 100 45 1 *. lookat (V3 0 0 5) (V3 0 0 0) (V3 0 1 0) *. v
+
+blend = Blend (FuncAdd,FuncAdd) ((srcF,dstF),(srcF,dstF)) one
+ where
+   srcF    = OneBF--SrcAlpha
+   dstF    = OneBF--OneMinusSrcAlpha
+
+dbgPosistion :: Vec 3 Float -> Vec 3 Float -> Float -> Float -> Vec 4 Float
+dbgPosistion pos vertexpos angle radius =
+  cameraTransform $ V4 pos%x pos%y pos%z 1 + rotMatrixZ angle *. V4 scaledVertexPos%x scaledVertexPos%y scaledVertexPos%z 1
+  where
+    scaledVertexPos = vertexpos *! radius
+
+particlePosition :: Vec 3 Float -> Vec 2 Float -> Float -> Float -> Vec 4 Float
+particlePosition pos vertexpos angle radius =
+  cameraTransform $ V4 pos%x pos%y pos%z 1 + rotMatrixZ angle *. V4 scaledVertexPos%x scaledVertexPos%y 0 1
+  where
+    scaledVertexPos = vertexpos *! radius
+
+makeFrame (time :: Float)
+          (color :: Vec 4 Float)
+          (angle :: Float)
+          (position :: Vec 3 Float)
+          (lifetime :: Float)
+          (texture :: Texture)
+          (prims :: PrimitiveStream Triangle (Vec 4 Float, Vec 3 Float, Vec 3 Float))
+          (radius :: Float)
+          (debugPrims :: PrimitiveStream Triangle ((Vec 3 Float)) )
+          (quadPrims :: PrimitiveStream Triangle (Vec 2 Float, Vec 2 Float) )
+          (particlePrims :: PrimitiveStream Triangle (Vec 2 Float, Vec 2 Float) )
+
+    = imageFrame (emptyDepthImage 1, emptyColorImage (V4 1 1 1 1))
+  `overlay`
+      quadPrims
+    & mapPrimitives (\(vertexpos,uv) -> (V4 vertexpos%x vertexpos%y 0 1, uv))
+    & rasterizePrimitives (TriangleCtx CullNone PolygonFill NoOffset LastVertex) ((Smooth))
+    & mapFragments (\((uv)) -> ((texture2D (Sampler PointFilter MirroredRepeat texture) uv )))
+    & accumulateWith (DepthOp Always False, ColorOp NoBlending (V4 True True True True))
+  `overlay`
+      debugPrims
+    & mapPrimitives (\((p)) -> ((dbgPosistion position p angle radius)))
+    & rasterizePrimitives (TriangleCtx CullBack (PolygonLine 1) NoOffset LastVertex) ()
+    & mapFragments (\_ -> ((color)))
+    & accumulateWith (DepthOp Less False, ColorOp NoBlending (V4 True True True True))
+  `overlay`
+      prims
+    & mapPrimitives (\(vertexpos,_n,uvw) -> vertexPositionAndTexture position vertexpos uvw angle radius)
+    & rasterizePrimitives (TriangleCtx CullBack PolygonFill NoOffset LastVertex) ((Smooth))
+    & mapFragments (\((uv)) -> ((color * texture2D (Sampler PointFilter MirroredRepeat texture) uv )))
+    & accumulateWith (DepthOp Less True, ColorOp NoBlending (V4 True True True True))
+  `overlay`
+      particlePrims
+    & mapPrimitives (\(vertexpos,uv) -> (particlePosition position vertexpos angle radius, uv))
+    & rasterizePrimitives (TriangleCtx CullNone PolygonFill NoOffset LastVertex) ((Smooth))
+    & mapFragments (\((uv)) -> ((texture2D (Sampler PointFilter MirroredRepeat texture) uv *! (min lifetime 0.4))))
+    & accumulateWith (DepthOp Less False, ColorOp blend (V4 True True True True))
+
+postProcess (image :: Image 1 (Color (Vec 4 Float)))
+    = imageFrame ((emptyColorImage (V4 1 1 1 1)))
+  `overlay`
+      quadPrims
+    & mapPrimitives (\(vertexpos,uv) -> (V4 vertexpos%x vertexpos%y 0 1, uv))
+    & rasterizePrimitives (TriangleCtx CullNone PolygonFill NoOffset LastVertex) ((Smooth))
+    & mapFragments (\((uv)) -> ((texture2D (Sampler LinearFilter MirroredRepeat texture) (uv*! 0.94 + distort uv *! 0.06) )) )
+    & accumulateWith ((ColorOp NoBlending (V4 True True True True)))
+ where
+  quadPrims = (fetch "quad" (Attribute "position", Attribute "uv") :: PrimitiveStream Triangle (Vec 2 Float, Vec 2 Float) )
+  texture = Texture2D (V2 640 640 :: Vec 2 Int) image
+
+distortTex = Texture2DSlot "distortionTexture"
+distort uv = (texture2D (Sampler LinearFilter MirroredRepeat distortTex) (uv *! 1.0))%xz
+
+main = renderFrame $
+   postProcess $ PrjImageColor $
+   makeFrame (Uniform "time")
+             (Uniform "diffuseColor")
+             (Uniform "angle")
+             (Uniform "position")
+             (Uniform "lifetime")
+             (Texture2DSlot "diffuseTexture")
+             (fetch "objects" (Attribute "position", Attribute "normal", Attribute "uvw"))
+             (Uniform "radius")
+             (fetch "debugObjects" ((Attribute "position")) )
+             (fetch "quad" (Attribute "position", Attribute "uv") )
+             (fetch "particles" (Attribute "position", Attribute "uv") )

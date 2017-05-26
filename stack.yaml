@@ -1,9 +1,13 @@
 flags: {}
 packages:
-- '.'
+- hello
+- hello-obj
+- asteroids
+- lambdacube-obj
 extra-deps:
 - lambdacube-compiler-0.6.0.1
 - megaparsec-5.0.1
 - lambdacube-gl-0.5.2.4
 - wavefront-0.7.1
+- MonadRandom-0.5.1
 resolver: lts-6.25

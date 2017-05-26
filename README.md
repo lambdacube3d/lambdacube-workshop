@@ -21,9 +21,10 @@ To prepare for the workshop read the following steps
 
 Checkout the this repository then run the following commands to check your setup.
 ```
+cd hello
 stack setup
 stack build
-stack exec lambdacube-hello
+stack exec hello
 ```
 On success you should see this.
 

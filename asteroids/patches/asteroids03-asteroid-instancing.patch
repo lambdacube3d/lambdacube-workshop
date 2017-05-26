@@ -1,0 +1,49 @@
+diff --git a/lambdacube-workshop/asteroids/Asteroids.hs b/lambdacube-workshop/asteroids/Asteroids.hs
+index 9dcf24b..76e4e90 100644
+--- a/lambdacube-workshop/asteroids/Asteroids.hs
++++ b/lambdacube-workshop/asteroids/Asteroids.hs
+@@ -44,8 +44,8 @@ main = do
+     -- load materials textures
+     gpuMtlLib <- OBJ.uploadMtlLib $ mconcat [spaceshipMtl, asteroidMtl]
+ 
+-    asteroidObj <- OBJ.addOBJToObjectArray storage "objects" [] asteroidMesh gpuMtlLib
+     spaceshipObj <- OBJ.addOBJToObjectArray storage "objects" ["position", "angle"] spaceshipMesh gpuMtlLib
++    asteroidPool <- replicateM 1000 $ OBJ.addOBJToObjectArray storage "objects" ["position", "angle"] asteroidMesh gpuMtlLib
+ 
+     -- allocate GL pipeline
+     let loadRenderer = do
+@@ -67,8 +67,8 @@ main = do
+         disableObjects :: [LambdaCubeGL.Object] -> IO ()
+         disableObjects objs = mapM_ (\obj -> LambdaCubeGL.enableObject obj False) objs
+ 
+-        addToScene :: Vec2 -> Float -> V4 Float -> [LambdaCubeGL.Object] -> IO ()
+-        addToScene position angle color objs = do
++        addToScene :: Vec2 -> Float -> V4 Float -> [[LambdaCubeGL.Object]] -> IO [[LambdaCubeGL.Object]]
++        addToScene position angle color (objs:pool) = do
+           forM_ objs $ \obj -> do
+             LambdaCubeGL.enableObject obj True
+             LambdaCubeGL.updateObjectUniforms obj $ do
+@@ -76,6 +76,7 @@ main = do
+               "diffuseColor" @= return color
+               "position" @= let Vec2 x y = position in do
+                 return (V3 x y 0)
++          return pool
+ 
+         white = V4 1 1 1 1 :: V4 Float
+ 
+@@ -91,9 +92,14 @@ main = do
+                 LambdaCubeGL.updateUniforms storage $ do
+                   "time" @= return t
+ 
++                -- spaceship
+                 case spaceship of
+                   Nothing -> disableObjects spaceshipObj
+-                  Just spaceship -> void $ addToScene (sPosition spaceship) (sAngle spaceship) white spaceshipObj
++                  Just spaceship -> void $ addToScene (sPosition spaceship) (sAngle spaceship) white [spaceshipObj]
++
++                -- asteroids
++                asteroidPool1 <- foldM (\pool asteroid -> addToScene (aPosition asteroid) 0 white pool) asteroidPool asteroids
++                disableObjects $ concat asteroidPool1
+ 
+                 -- render
+                 LambdaCubeGL.renderFrame renderer

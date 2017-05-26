@@ -1,0 +1,56 @@
+diff --git a/lambdacube-workshop/asteroids/Asteroids.hs b/lambdacube-workshop/asteroids/Asteroids.hs
+index 74e4e7e..b43ea99 100644
+--- a/lambdacube-workshop/asteroids/Asteroids.hs
++++ b/lambdacube-workshop/asteroids/Asteroids.hs
+@@ -47,6 +47,7 @@ main = do
+             "angle"           @: Float
+             "radius"          @: Float
+             "lifetime"        @: Float
++            "distortionTexture" @: FTexture2D
+ 
+     storage <- LambdaCubeGL.allocStorage inputSchema
+ 
+@@ -91,6 +92,15 @@ main = do
+     LambdaCubeGL.updateObjectUniforms backgroundObj $ do
+       "diffuseTexture" @= return textureData
+ 
++    -- distortion texture
++    -- load image and upload texture
++    Right img <- Juicy.readImage "data/distortion.jpg"
++    textureData <- LambdaCubeGL.uploadTexture2DToGPU img
++
++    LambdaCubeGL.updateUniforms storage $ do
++      "distortionTexture" @= return textureData
++      "distort" @= return False
++
+     -- particles
+     Right img <- Juicy.readImage "data/particle.png"
+     textureData <- LambdaCubeGL.uploadTexture2DToGPU img
+diff --git a/lambdacube-workshop/asteroids/Asteroids.lc b/lambdacube-workshop/asteroids/Asteroids.lc
+index 05891ea..a330dcb 100644
+--- a/lambdacube-workshop/asteroids/Asteroids.lc
++++ b/lambdacube-workshop/asteroids/Asteroids.lc
+@@ -69,7 +69,23 @@ makeFrame (time :: Float)
+     & mapFragments (\((uv)) -> ((texture2D (Sampler PointFilter MirroredRepeat texture) uv *! (min lifetime 0.4))))
+     & accumulateWith (DepthOp Less False, ColorOp blend (V4 True True True True))
+ 
++postProcess (image :: Image 1 (Color (Vec 4 Float)))
++    = imageFrame ((emptyColorImage (V4 1 1 1 1)))
++  `overlay`
++      quadPrims
++    & mapPrimitives (\(vertexpos,uv) -> (V4 vertexpos%x vertexpos%y 0 1, uv))
++    & rasterizePrimitives (TriangleCtx CullNone PolygonFill NoOffset LastVertex) ((Smooth))
++    & mapFragments (\((uv)) -> ((texture2D (Sampler LinearFilter MirroredRepeat texture) (uv*! 0.94 + distort uv *! 0.06) )) )
++    & accumulateWith ((ColorOp NoBlending (V4 True True True True)))
++ where
++  quadPrims = (fetch "quad" (Attribute "position", Attribute "uv") :: PrimitiveStream Triangle (Vec 2 Float, Vec 2 Float) )
++  texture = Texture2D (V2 640 640 :: Vec 2 Int) image
++
++distortTex = Texture2DSlot "distortionTexture"
++distort uv = (texture2D (Sampler LinearFilter MirroredRepeat distortTex) (uv *! 1.0))%xz
++
+ main = renderFrame $
++   postProcess $ PrjImageColor $
+    makeFrame (Uniform "time")
+              (Uniform "diffuseColor")
+              (Uniform "angle")

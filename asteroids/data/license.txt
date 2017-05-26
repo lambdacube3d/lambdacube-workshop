@@ -1,0 +1,52 @@
+models and texture sources: www.turbosquid.com
+
+###############################################################################
+
+	Smoke particle pack by Kenney Vleugels (www.kenney.nl)
+
+			------------------------------
+
+			        License (CC0)
+	       http://creativecommons.org/publicdomain/zero/1.0/
+
+	You may use these graphics in personal and commercial projects.
+	Credit (Kenney or www.kenney.nl) would be nice but is not mandatory.
+
+###############################################################################
+
+author: rUDY^mNV
+
+Rudolf Getel
+rudy@mindnever.org
+www.mindnever.org
+rudymnv.deviantart.com
+
+contact me if you need 3d models and 2d gfx...
+if you use model in your productions please give me credit
+
+this object is not optimised... about 45min of work on this one
+...but it's free!
+
+... ;) happy playing...
+
+
+###############################################################################
+
+polygon.....................150
+vertices....................150.
+
+
+2048*2048* texture,
+
+obj,fbx,blend  format model.
+
+
+My other models here..
+http://www.turbosquid.com/
+http://3docean.net/
+by  icekazim.....
+
+Thanks.
+
+
+###############################################################################

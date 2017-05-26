@@ -1,0 +1,81 @@
+diff --git a/lambdacube-workshop/asteroids/Asteroids.hs b/lambdacube-workshop/asteroids/Asteroids.hs
+index e267048..2373190 100644
+--- a/lambdacube-workshop/asteroids/Asteroids.hs
++++ b/lambdacube-workshop/asteroids/Asteroids.hs
+@@ -5,6 +5,7 @@ import System.IO
+ import System.Directory
+ 
+ import Data.Vect
++import Codec.Picture as Juicy
+ import Graphics.UI.GLFW as GLFW
+ 
+ import LambdaCube.Compiler as LambdaCube -- compiler
+@@ -32,6 +33,9 @@ main = do
+             "uvw"       @: Attribute_V3F
+           defObjectArray "debugObjects" Triangles $ do
+             "position"  @: Attribute_V3F
++          defObjectArray "quad" Triangles $ do
++            "position"  @: Attribute_V2F
++            "uv"        @: Attribute_V2F
+           defUniforms $ do
+             "time"            @: Float
+             "diffuseTexture"  @: FTexture2D
+@@ -68,6 +72,17 @@ main = do
+       sphereObj <- LambdaCubeGL.addMeshToObjectArray storage "debugObjects" ["diffuseColor", "position", "radius", "angle"] sphereMesh
+       return [sphereObj]
+ 
++    -- background
++    quadMesh <- LambdaCubeGL.uploadMeshToGPU quad
++    backgroundObj <- LambdaCubeGL.addMeshToObjectArray storage "quad" ["diffuseTexture"] quadMesh
++
++    -- load image and upload texture
++    Right img <- Juicy.readImage "data/background.jpg"
++    textureData <- LambdaCubeGL.uploadTexture2DToGPU img
++
++    LambdaCubeGL.updateObjectUniforms backgroundObj $ do
++      "diffuseTexture" @= return textureData
++
+     -- allocate GL pipeline
+     let loadRenderer = do
+           LambdaCube.compileMain ["."] OpenGL33 "Asteroids.lc" >>= \case
+@@ -206,3 +221,14 @@ boundingSphereRadius :: LambdaCubeGL.Mesh -> Float
+ boundingSphereRadius Mesh{..} = case Map.lookup "position" mAttributes of
+   Just (A_V4F vertices) -> maximum $ fmap (len . v4ToVec3) vertices
+   _ -> 0
++
++quad :: LambdaCubeGL.Mesh
++quad = Mesh
++    { mAttributes   = Map.fromList
++        [ ("position",  A_V2F $ V.fromList [V2 1 1, V2 1 (-1), V2 (-1) (-1)
++                                           ,V2 1 1, V2 (-1) (-1), V2 (-1) 1])
++        , ("uv",        A_V2F $ V.fromList [V2 1 1, V2 1 0, V2 0 0
++                                           ,V2 1 1, V2 0 0, V2 0 1])
++        ]
++    , mPrimitive    = P_Triangles
++    }
+diff --git a/lambdacube-workshop/asteroids/Asteroids.lc b/lambdacube-workshop/asteroids/Asteroids.lc
+index 2bd7749..0e06795 100644
+--- a/lambdacube-workshop/asteroids/Asteroids.lc
++++ b/lambdacube-workshop/asteroids/Asteroids.lc
+@@ -28,9 +28,16 @@ makeFrame (time :: Float)
+           (prims :: PrimitiveStream Triangle (Vec 4 Float, Vec 3 Float, Vec 3 Float))
+           (radius :: Float)
+           (debugPrims :: PrimitiveStream Triangle ((Vec 3 Float)) )
++          (quadPrims :: PrimitiveStream Triangle (Vec 2 Float, Vec 2 Float) )
+ 
+     = imageFrame (emptyDepthImage 1, emptyColorImage (V4 1 1 1 1))
+   `overlay`
++      quadPrims
++    & mapPrimitives (\(vertexpos,uv) -> (V4 vertexpos%x vertexpos%y 0 1, uv))
++    & rasterizePrimitives (TriangleCtx CullNone PolygonFill NoOffset LastVertex) ((Smooth))
++    & mapFragments (\((uv)) -> ((texture2D (Sampler PointFilter MirroredRepeat texture) uv )))
++    & accumulateWith (DepthOp Always False, ColorOp NoBlending (V4 True True True True))
++  `overlay`
+       debugPrims
+     & mapPrimitives (\((p)) -> ((dbgPosistion position p angle radius)))
+     & rasterizePrimitives (TriangleCtx CullBack (PolygonLine 1) NoOffset LastVertex) ()
+@@ -52,3 +59,4 @@ main = renderFrame $
+              (fetch "objects" (Attribute "position", Attribute "normal", Attribute "uvw"))
+              (Uniform "radius")
+              (fetch "debugObjects" ((Attribute "position")) )
++             (fetch "quad" (Attribute "position", Attribute "uv") )

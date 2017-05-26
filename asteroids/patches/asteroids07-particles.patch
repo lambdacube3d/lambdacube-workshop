@@ -1,0 +1,127 @@
+diff --git a/lambdacube-workshop/asteroids/Asteroids.hs b/lambdacube-workshop/asteroids/Asteroids.hs
+index 2d9a700..74e4e7e 100644
+--- a/lambdacube-workshop/asteroids/Asteroids.hs
++++ b/lambdacube-workshop/asteroids/Asteroids.hs
+@@ -33,6 +33,9 @@ main = do
+             "uvw"       @: Attribute_V3F
+           defObjectArray "debugObjects" Triangles $ do
+             "position"  @: Attribute_V3F
++          defObjectArray "particles" Triangles $ do
++            "position"  @: Attribute_V2F
++            "uv"        @: Attribute_V2F
+           defObjectArray "quad" Triangles $ do
+             "position"  @: Attribute_V2F
+             "uv"        @: Attribute_V2F
+@@ -43,6 +46,7 @@ main = do
+             "position"        @: V3F
+             "angle"           @: Float
+             "radius"          @: Float
++            "lifetime"        @: Float
+ 
+     storage <- LambdaCubeGL.allocStorage inputSchema
+ 
+@@ -87,6 +91,13 @@ main = do
+     LambdaCubeGL.updateObjectUniforms backgroundObj $ do
+       "diffuseTexture" @= return textureData
+ 
++    -- particles
++    Right img <- Juicy.readImage "data/particle.png"
++    textureData <- LambdaCubeGL.uploadTexture2DToGPU img
++    particlePool <- replicateM 200 $ LambdaCubeGL.addMeshToObjectArray storage "particles" ["position", "angle", "diffuseTexture", "radius", "lifetime"] quadMesh
++    forM_ particlePool $ \particleObj -> LambdaCubeGL.updateObjectUniforms particleObj $ do
++      "diffuseTexture" @= return textureData
++
+     -- allocate GL pipeline
+     let loadRenderer = do
+           LambdaCube.compileMain ["."] OpenGL33 "Asteroids.lc" >>= \case
+@@ -119,6 +130,17 @@ main = do
+                 return (V3 x y 0)
+           return pool
+ 
++        addToScene2D :: Vec2 -> Float -> Float -> [LambdaCubeGL.Object] -> IO [LambdaCubeGL.Object]
++        addToScene2D position radius lifetime (obj:pool) = do
++          LambdaCubeGL.enableObject obj True
++          LambdaCubeGL.updateObjectUniforms obj $ do
++            -- "diffuseColor" @= return (V4 1 1 1 (1 :: Float))
++            "lifetime"     @= return lifetime
++            "radius"       @= return radius
++            "position"     @= let Vec2 x y = position in do
++              return (V3 x y 0)
++          return pool
++
+         white = V4 1 1 1 1 :: V4 Float
+ 
+         floatTime :: IO Float
+@@ -154,6 +176,10 @@ main = do
+                 bulletPool1 <- foldM (\pool Bullet{..} -> addToScene bPosition bAngle (bRadius / bulletRadius) white pool) bulletPool bullets
+                 disableObjects $ concat bulletPool1
+ 
++                -- particles
++                particlePool1 <- foldM (\pool Particle{..} -> addToScene2D pPosition pRadius pLifetime pool) particlePool particles
++                disableObjects particlePool1
++
+                 -- render
+                 LambdaCubeGL.renderFrame renderer
+                 GLFW.swapBuffers win
+diff --git a/lambdacube-workshop/asteroids/Asteroids.lc b/lambdacube-workshop/asteroids/Asteroids.lc
+index 0e06795..05891ea 100644
+--- a/lambdacube-workshop/asteroids/Asteroids.lc
++++ b/lambdacube-workshop/asteroids/Asteroids.lc
+@@ -14,21 +14,34 @@ vertexPositionAndTexture pos vertexpos uvw angle radius =
+ 
+ cameraTransform v = perspective 0.1 100 45 1 *. lookat (V3 0 0 5) (V3 0 0 0) (V3 0 1 0) *. v
+ 
++blend = Blend (FuncAdd,FuncAdd) ((srcF,dstF),(srcF,dstF)) one
++ where
++   srcF    = OneBF--SrcAlpha
++   dstF    = OneBF--OneMinusSrcAlpha
++
+ dbgPosistion :: Vec 3 Float -> Vec 3 Float -> Float -> Float -> Vec 4 Float
+ dbgPosistion pos vertexpos angle radius =
+   cameraTransform $ V4 pos%x pos%y pos%z 1 + rotMatrixZ angle *. V4 scaledVertexPos%x scaledVertexPos%y scaledVertexPos%z 1
+   where
+     scaledVertexPos = vertexpos *! radius
+ 
++particlePosition :: Vec 3 Float -> Vec 2 Float -> Float -> Float -> Vec 4 Float
++particlePosition pos vertexpos angle radius =
++  cameraTransform $ V4 pos%x pos%y pos%z 1 + rotMatrixZ angle *. V4 scaledVertexPos%x scaledVertexPos%y 0 1
++  where
++    scaledVertexPos = vertexpos *! radius
++
+ makeFrame (time :: Float)
+           (color :: Vec 4 Float)
+           (angle :: Float)
+           (position :: Vec 3 Float)
++          (lifetime :: Float)
+           (texture :: Texture)
+           (prims :: PrimitiveStream Triangle (Vec 4 Float, Vec 3 Float, Vec 3 Float))
+           (radius :: Float)
+           (debugPrims :: PrimitiveStream Triangle ((Vec 3 Float)) )
+           (quadPrims :: PrimitiveStream Triangle (Vec 2 Float, Vec 2 Float) )
++          (particlePrims :: PrimitiveStream Triangle (Vec 2 Float, Vec 2 Float) )
+ 
+     = imageFrame (emptyDepthImage 1, emptyColorImage (V4 1 1 1 1))
+   `overlay`
+@@ -49,14 +62,22 @@ makeFrame (time :: Float)
+     & rasterizePrimitives (TriangleCtx CullBack PolygonFill NoOffset LastVertex) ((Smooth))
+     & mapFragments (\((uv)) -> ((color * texture2D (Sampler PointFilter MirroredRepeat texture) uv )))
+     & accumulateWith (DepthOp Less True, ColorOp NoBlending (V4 True True True True))
++  `overlay`
++      particlePrims
++    & mapPrimitives (\(vertexpos,uv) -> (particlePosition position vertexpos angle radius, uv))
++    & rasterizePrimitives (TriangleCtx CullNone PolygonFill NoOffset LastVertex) ((Smooth))
++    & mapFragments (\((uv)) -> ((texture2D (Sampler PointFilter MirroredRepeat texture) uv *! (min lifetime 0.4))))
++    & accumulateWith (DepthOp Less False, ColorOp blend (V4 True True True True))
+ 
+ main = renderFrame $
+    makeFrame (Uniform "time")
+              (Uniform "diffuseColor")
+              (Uniform "angle")
+              (Uniform "position")
++             (Uniform "lifetime")
+              (Texture2DSlot "diffuseTexture")
+              (fetch "objects" (Attribute "position", Attribute "normal", Attribute "uvw"))
+              (Uniform "radius")
+              (fetch "debugObjects" ((Attribute "position")) )
+              (fetch "quad" (Attribute "position", Attribute "uv") )
++             (fetch "particles" (Attribute "position", Attribute "uv") )

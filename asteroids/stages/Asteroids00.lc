@@ -1,0 +1,2 @@
+main = renderFrame $
+   imageFrame (emptyDepthImage 1, emptyColorImage (V4 1 1 1 1) :: Image 1 ('Color (Vec 4 Float)))
