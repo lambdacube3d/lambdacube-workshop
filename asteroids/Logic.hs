@@ -186,4 +186,4 @@ collideWorld World{..} = do
     bullets' = filter (not . collideAsteroidsBullet asteroids) bullets
 
 stepGame :: MonadRandom m => Float -> UserInput -> World -> m World
-stepGame deltaTime userInput = collideWorld . stepWorld deltaTime userInput
+stepGame deltaTime userInput = {-collideWorld-} pure . stepWorld deltaTime userInput
