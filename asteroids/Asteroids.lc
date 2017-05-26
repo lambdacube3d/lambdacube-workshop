@@ -85,7 +85,7 @@ distortTex = Texture2DSlot "distortionTexture"
 distort uv = (texture2D (Sampler LinearFilter MirroredRepeat distortTex) (uv *! 1.0))%xz
 
 main = renderFrame $
-   postProcess $ PrjImageColor $
+--   postProcess $ PrjImageColor $
    makeFrame (Uniform "time")
              (Uniform "diffuseColor")
              (Uniform "angle")
