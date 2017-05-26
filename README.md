@@ -29,3 +29,6 @@ stack exec hello
 On success you should see this.
 
 ![](http://lambdacube3d.com/hello-screenshot.png)
+
+## Slides
+[lc-workshop.html](https://rawgit.com/csabahruska/lambdacube-workshop/master/lc-workshop.html)
