@@ -18,7 +18,7 @@ import LambdaCube.GL.Mesh as LambdaCubeGL
 import qualified Data.Map as Map
 import qualified Data.Vector as V
 
-asteroidsModificationTime = getModificationTime "Asteroids08.lc"
+asteroidsModificationTime = getModificationTime "Asteroids.lc"
 
 main :: IO ()
 main = do
@@ -110,7 +110,7 @@ main = do
 
     -- allocate GL pipeline
     let loadRenderer = do
-          LambdaCube.compileMain ["."] OpenGL33 "Asteroids08.lc" >>= \case
+          LambdaCube.compileMain ["."] OpenGL33 "Asteroids.lc" >>= \case
             Left err  -> do
               putStrLn $ "compile error:\n" ++ ppShow err
               return Nothing

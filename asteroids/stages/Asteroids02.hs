@@ -12,7 +12,7 @@ import LambdaCube.GL as LambdaCubeGL -- renderer
 import qualified LambdaCube.OBJ as OBJ
 import Logic
 
-asteroidsModificationTime = getModificationTime "Asteroids02.lc"
+asteroidsModificationTime = getModificationTime "Asteroids.lc"
 
 main :: IO ()
 main = do
@@ -49,7 +49,7 @@ main = do
 
     -- allocate GL pipeline
     let loadRenderer = do
-          LambdaCube.compileMain ["."] OpenGL33 "Asteroids02.lc" >>= \case
+          LambdaCube.compileMain ["."] OpenGL33 "Asteroids.lc" >>= \case
             Left err  -> do
               putStrLn $ "compile error:\n" ++ ppShow err
               return Nothing
