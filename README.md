@@ -37,6 +37,7 @@ On success you should see this.
 
 ```
 cd asteroids
+stack setup
 stack build
 stack exec asteroids
 ```
