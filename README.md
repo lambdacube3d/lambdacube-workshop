@@ -32,3 +32,14 @@ On success you should see this.
 
 ## Slides
 [lc-workshop.html](https://rawgit.com/csabahruska/lambdacube-workshop/master/lc-workshop.html)
+
+## Run asteroids
+
+```
+cd asteroids
+stack build
+stack exec asteroids
+```
+
+![](asteroids.jpg)
+
