@@ -1,4 +1,5 @@
 # LambdaCube 3D Workshop
+[![Gitter chat](https://badges.gitter.im/lambdacube3d/lambdacube3d.png)](https://gitter.im/LambdaCube-3D/Lobby)
 
 To prepare for the workshop read the following steps
 
