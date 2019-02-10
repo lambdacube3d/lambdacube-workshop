@@ -7,7 +7,7 @@ To prepare for the workshop read the following steps
 
 ## Requirements
 - Hardware support for OpenGL 3.3 or better
-- OS: Linux/OSX/Windows
+- OS: Linux/macOS/Windows
 
 ## Setup Development Environment
 1. Install Haskell [Stack](http://www.haskellstack.org) by following it's simple [install manual](https://docs.haskellstack.org/en/stable/README/#how-to-install).
